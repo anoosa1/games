@@ -132,6 +132,16 @@
   .link-icon::before, .link-icon::after { content: ""; position: absolute; top: 3px; width: 10px; height: 8px; box-sizing: border-box; border: 1.5px solid currentColor; border-radius: 5px }
   .link-icon::before { left: 0 }
   .link-icon::after { right: 0 }
+  .drop-board { display: grid; grid-template-columns: repeat(var(--columns), minmax(0, 1fr)); aspect-ratio: var(--columns) / var(--rows); gap: 3px; padding: 8px; background: #405546 }
+  .drop-column { display: grid; grid-template-rows: repeat(var(--rows), minmax(0, 1fr)); gap: 3px; min-width: 0; border: 0; border-radius: 5px; background: transparent; padding: 0 }
+  .drop-column:enabled:hover, .drop-column:focus-visible { background: #718478 }
+  .drop-cell { display: grid; place-items: center; aspect-ratio: 1; width: 100%; align-self: center; border-radius: 50%; background: #202d24; color: #241a13 }
+  .drop-cell.filled { background: var(--team); box-shadow: inset 0 0 0 2px #241a1344 }
+  .drop-cell.winning { outline: 2px solid #faf3e2; outline-offset: -3px }
+  .drop-match.layout { grid-template-columns: minmax(0, 1fr); max-width: 620px; margin-inline: auto }
+  .drop-match .board { width: 100% }
+  .drop-match .panel { padding: 0; border: 0; background: transparent }
+  .drop-match .message, .drop-match .actions:not(:has(> :not([hidden]))) { display: none }
   @media (min-width: 900px) {
     main { width: min(100% - 48px, 1080px) }
     .layout { grid-template-columns: minmax(0, 1fr) minmax(270px, 340px); align-items: start; gap: 18px 28px }
@@ -156,7 +166,8 @@
       <fieldset id="game-choice">
         <legend class="visually-hidden">Game</legend>
         <label><input type="radio" name="game" value="ludo" checked> Ludo</label>
-        <label><input type="radio" name="game" value="five"> Five in a Row</label>
+        <label><input type="radio" name="game" value="five"> Sequence</label>
+        <label><input type="radio" name="game" value="drop"> Connect 4</label>
       </fieldset>
       <label for="name">Name</label>
       <input id="name" maxlength="20" required autocomplete="nickname">
@@ -170,7 +181,8 @@
     <section class="board" id="ludo-board" aria-label="Ludo board">
       <div class="layer" id="tiles" aria-hidden="true"></div><div class="layer piece-layer" id="pieces"></div>
     </section>
-    <section class="board card-board" id="card-board" aria-label="Five in a Row board" hidden></section>
+    <section class="board card-board" id="card-board" aria-label="Sequence board" hidden></section>
+    <section class="board drop-board" id="drop-board" aria-label="Connect 4 board" hidden></section>
     <section class="panel" aria-labelledby="turn">
       <h3 id="turn"></h3>
       <p class="message" id="message" role="status"></p>
@@ -200,7 +212,7 @@
 'use strict';
 
 const COLORS = ['red', 'green', 'yellow', 'blue'];
-const TITLES = { ludo: 'Ludo', five: 'Five in a Row' };
+const TITLES = { ludo: 'Ludo', five: 'Sequence', drop: 'Connect 4' };
 const RULES = {
   ludo: [
     'Roll a six to bring a piece out of your yard. Otherwise, move a piece already on the board.',
@@ -214,6 +226,11 @@ const RULES = {
     'Get five of your chips in a straight line to win. Rows, columns and diagonals count.',
     'The game is a draw if the board fills up without a winner.',
   ],
+  drop: [
+    'Choose a column to drop a piece into its lowest open space.',
+    'Get four in a row horizontally, vertically or diagonally to win.',
+    'If the board fills up without a winner, the game is a draw.',
+  ],
 };
 
 const HOME = 56;
@@ -223,6 +240,8 @@ const EMPTY_PIECES = [-1, -1, -1, -1];
 const CARD_RANKS = ['2', '4', '6', '8', '10', 'Q'];
 const SUITS = ['♠', '♥', '♣', '♦'];
 const BOARD_SIZE = 7;
+const DROP_ROWS = 6;
+const DROP_COLUMNS = 7;
 const CARD_TYPES = SUITS.flatMap(suit => CARD_RANKS.map(rank => rank + suit)).concat('A♠');
 
 function rotate([row, col], turns) {
@@ -283,7 +302,9 @@ function reset(room, phase) {
       player.hand = [];
     }
   });
-  if (room.game === 'five') {
+  if (room.game === 'drop') {
+    room.chips = Array(DROP_ROWS * DROP_COLUMNS).fill(null);
+  } else if (room.game === 'five') {
     const boardDeck = [...CARD_TYPES, ...CARD_TYPES.slice(0, -1)];
     room.cards = shuffled(boardDeck);
     room.chips = Array(BOARD_SIZE ** 2).fill(null);
@@ -346,25 +367,42 @@ function matchingCells(cards, chips, card) {
   return cards.flatMap((value, index) => value === card && chips[index] === null ? [index] : []);
 }
 
-function winningLine(chips, index, seat) {
-  const row = Math.floor(index / BOARD_SIZE);
-  const col = index % BOARD_SIZE;
+function winningLine(chips, index, seat, rows = BOARD_SIZE, columns = BOARD_SIZE, target = 5) {
+  const row = Math.floor(index / columns);
+  const col = index % columns;
   for (const [dy, dx] of [[0, 1], [1, 0], [1, 1], [1, -1]]) {
     const line = [index];
     for (const direction of [-1, 1]) {
       let r = row + direction * dy;
       let c = col + direction * dx;
-      while (r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE) {
-        const cell = r * BOARD_SIZE + c;
+      while (r >= 0 && r < rows && c >= 0 && c < columns) {
+        const cell = r * columns + c;
         if (chips[cell] !== seat) break;
         line.push(cell);
         r += direction * dy;
         c += direction * dx;
       }
     }
-    if (line.length >= 5) return line;
+    if (line.length >= target) return line;
   }
   return [];
+}
+
+function dropPiece(room, seat, column) {
+  if (!Number.isInteger(column) || column < 0 || column >= DROP_COLUMNS) throw Error('Choose a column.');
+  if (room.chips[column] !== null) throw Error('That column is full.');
+  let cell = (DROP_ROWS - 1) * DROP_COLUMNS + column;
+  while (room.chips[cell] !== null) cell -= DROP_COLUMNS;
+  room.chips[cell] = seat;
+  room.line = winningLine(room.chips, cell, seat, DROP_ROWS, DROP_COLUMNS, 4);
+  if (room.line.length || room.chips.every(chip => chip !== null)) {
+    room.phase = 'won';
+    room.winner = room.line.length ? seat : null;
+    room.message = room.line.length ? room.players[seat].name + ' made four in a row.' : 'The board is full.';
+    return;
+  }
+  room.message = '';
+  nextTurn(room);
 }
 
 function playCard(room, player, seat, action, handIndex, cell) {
@@ -399,7 +437,8 @@ function joinRoom(room, name, token) {
   const existing = room.players.findIndex(player => player?.token === token);
   if (existing !== -1) return existing;
   if (room.phase !== 'lobby') throw Error('The match has started. Ask the host to reopen the lobby.');
-  const seat = [2, 1, 3].find(index => !room.players[index]);
+  const guestSeats = room.game === 'drop' ? [2] : [2, 1, 3];
+  const seat = guestSeats.find(index => !room.players[index]);
   if (seat === undefined) throw Error('The room is full.');
   room.players[seat] = newPlayer(name, token);
   room.version++;
@@ -423,12 +462,15 @@ function actionAt(room, seat, input) {
     if (room.game === 'ludo' && action === 'roll') roll(room, player, seat);
     else if (room.game === 'ludo' && action === 'move') move(room, player, seat, input.piece);
     else if (room.game === 'five' && ['play', 'exchange'].includes(action)) playCard(room, player, seat, action, input.card, input.cell);
+    else if (room.game === 'drop' && action === 'drop') dropPiece(room, seat, input.column);
     else throw Error('That action is unavailable.');
   }
   room.version++;
 }
 
 const byId = id => document.getElementById(id);
+byId('drop-board').style.setProperty('--rows', DROP_ROWS);
+byId('drop-board').style.setProperty('--columns', DROP_COLUMNS);
 const inviteAddress = new URLSearchParams(location.hash.slice(1)).get('join');
 const playerToken = inviteAddress
   ? sessionStorage.getItem('tabletop:' + inviteAddress) || crypto.randomUUID()
@@ -784,6 +826,33 @@ function renderCards(canAct) {
     state.hand.some(card => matchingCells(state.cards, state.chips, card).length);
 }
 
+function renderDrop(canAct) {
+  const columns = Array.from({ length: DROP_COLUMNS }, (_, column) => {
+    const control = button('', 'drop-column', () => submit('drop', { column }));
+    const occupants = [];
+    for (let row = 0; row < DROP_ROWS; row++) {
+      const index = row * DROP_COLUMNS + column;
+      const seat = state.chips[index];
+      const cell = document.createElement('span');
+      cell.className = 'drop-cell';
+      if (seat !== null) {
+        cell.classList.add('filled', COLORS[seat]);
+        cell.classList.toggle('winning', state.line.includes(index));
+        cell.textContent = seat === 0 ? '●' : '◆';
+        occupants.unshift(state.players[seat].name);
+      }
+      cell.setAttribute('aria-hidden', 'true');
+      control.append(cell);
+    }
+    const full = state.chips[column] !== null;
+    control.disabled = !canAct || full;
+    control.setAttribute('aria-label', 'Column ' + (column + 1) + (full ? ', full' : '') +
+      (occupants.length ? ', bottom to top: ' + occupants.join(', ') : ', empty'));
+    return control;
+  });
+  byId('drop-board').replaceChildren(...columns);
+}
+
 function render() {
   const { game, phase, players, winner, turn, you } = state;
   const lobby = phase === 'lobby';
@@ -791,26 +860,33 @@ function render() {
   const myTurn = playing && turn === you;
   const canAct = myTurn && connectionReady && !pending;
   const count = players.filter(Boolean).length;
+  const drop = game === 'drop';
+  const matchBoardOnly = drop && playing;
   byId('title').textContent = TITLES[game];
   byId('entry').hidden = true;
   byId('table').hidden = false;
+  byId('table').classList.toggle('drop-match', matchBoardOnly);
   byId('rules-button').hidden = false;
   byId('invite-button').hidden = !listener;
   byId('ludo-board').hidden = game !== 'ludo';
   byId('card-board').hidden = game !== 'five';
+  byId('drop-board').hidden = !drop;
   byId('dice-controls').hidden = game !== 'ludo' || !playing;
   byId('reconnect').hidden = connectionReady || !inviteAddress;
   byId('start').hidden = !room || playing;
   byId('start').disabled = count < 2;
   byId('start').textContent = lobby ? 'Start match' : 'Play again';
-  byId('lobby').hidden = !room || lobby;
+  byId('lobby').hidden = !room || lobby || matchBoardOnly;
+  byId('turn').setAttribute('aria-live', drop ? 'polite' : 'off');
   byId('turn').textContent = lobby ? 'Lobby'
     : playing ? myTurn ? 'Your turn' : players[turn].name + '’s turn'
     : winner === null ? 'Draw' : winner === you ? 'You win!' : players[winner].name + ' wins!';
   byId('message').textContent = lobby
-    ? count + ' of 4 seats filled. ' + (count < 2 ? 'Waiting for another player.' : 'Ready to start.')
+    ? count + ' of ' + (drop ? 2 : 4) + ' seats filled. ' + (count < 2 ? 'Waiting for another player.' : 'Ready to start.')
     : state.message + (myTurn && state.moves.length ? ' Choose a piece.' : '');
-  byId('players').replaceChildren(...players.map((player, seat) => {
+  byId('players').hidden = matchBoardOnly;
+  byId('players').replaceChildren(...players.flatMap((player, seat) => {
+    if (drop && seat !== 0 && seat !== 2) return [];
     const row = document.createElement('li');
     row.className = 'player ' + COLORS[seat] + (player ? '' : ' empty');
     row.classList.toggle('active', playing && turn === seat);
@@ -822,12 +898,12 @@ function render() {
     name.textContent = player ? player.name + (seat === you ? ' (you)' : seat === 0 ? ' (host)' : '')
       : lobby ? 'Open seat' : 'Unused seat';
     row.append(marker, name);
-    if (player && !lobby) {
+    if (player && !lobby && !drop) {
       const score = document.createElement('span');
       score.className = 'score';
       score.textContent = game === 'ludo' ? player.pieces.filter(step => step === HOME).length + ' / 4' : player.cards + ' cards';
       row.append(score);
-    } else if (player && room && seat !== 0) {
+    } else if (player && lobby && room && seat !== 0) {
       const remove = button('Remove', 'quiet remove', () => submit('remove', { seat }));
       remove.setAttribute('aria-label', 'Remove ' + player.name);
       row.append(remove);
@@ -835,7 +911,8 @@ function render() {
     return row;
   }));
   if (game === 'ludo') renderLudo(canAct);
-  else renderCards(canAct);
+  else if (game === 'five') renderCards(canAct);
+  else renderDrop(canAct);
 }
 
 if (inviteAddress) {
