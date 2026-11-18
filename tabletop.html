@@ -1,0 +1,906 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#171e19">
+<title>games.asherif.xyz</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --page: #171e19; --paper: #222c25; --ink: #eef3eb; --muted: #bac8ba;
+    --line: #526455; --accent: #375e44; --track: #29382e; --grid: #58665a;
+    --red: #d75343; --green: #328a62; --yellow: #e5a82e; --blue: #428acb;
+  }
+  * { box-sizing: border-box }
+  [hidden] { display: none !important }
+  body { margin: 0; background: var(--page); color: var(--ink); font: 16px/1.45 system-ui, sans-serif }
+  main { width: min(100% - 48px, 1000px); margin: 0 auto; padding: 35px 0 38px }
+  header { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding-bottom: 20px; border-bottom: 1px solid var(--line); margin-bottom: 29px }
+  h1, h2 { font-family: Georgia, serif; margin: 0; line-height: 1.05 }
+  h1 { font-size: clamp(54px, 8vw, 82px); letter-spacing: -.075em }
+  h2 { font-size: 30px; letter-spacing: -.034em }
+  p { margin: 0 }
+  .header-actions, .actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap }
+  button, input { font: inherit }
+  button { cursor: pointer; font-weight: 650 }
+  button:focus-visible, input:focus-visible, summary:focus-visible { outline: 3px solid #92c5fb; outline-offset: 3px }
+  button:disabled { cursor: default }
+  .outline, .primary, .quiet { border-radius: 8px; padding: 8px 13px; font-size: 14px; min-height: 40px }
+  .outline { color: var(--ink); border: 1px solid #647968; background: transparent }
+  .outline:hover, .quiet:hover { background: #334338 }
+  .primary { border: 1px solid var(--accent); color: #f7fff7; background: var(--accent) }
+  .primary:hover:not(:disabled) { background: #456f50 }
+  .primary:disabled { color: #bfccbe; border-color: #45584a; background: #334338 }
+  .quiet { color: var(--muted); background: transparent; border: 1px solid transparent }
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(246px, 310px); gap: 29px; align-items: center }
+  .board { position: relative; aspect-ratio: 1; background: #243128; border: 1px solid #536757; border-radius: 10px; outline: 5px solid #2b3930; box-shadow: 0 5px 19px #0005 }
+  .layer { position: absolute; inset: 2%; display: grid; grid-template: repeat(15, minmax(0, 1fr)) / repeat(15, minmax(0, 1fr)) }
+  .tile { display: grid; place-items: center; background: var(--track); border: 1px solid var(--grid); margin: 0 -1px -1px 0; font-size: clamp(9px, 2.2vw, 18px); font-weight: 750; line-height: 1 }
+  .red { --team: var(--red); --team-ink: #822e25 }
+  .green { --team: var(--green); --team-ink: #12432e }
+  .yellow { --team: var(--yellow); --team-ink: #694304 }
+  .blue { --team: var(--blue); --team-ink: #183f6c }
+  .lane, .yard { background: var(--team) }
+  .lane { color: #25211c }
+  .yard { display: grid; place-items: center; border: 1px solid var(--team-ink) }
+  .yard-inner { width: 68%; height: 68%; border-radius: 8px; border: 1px solid var(--team-ink); background: color-mix(in srgb, var(--team) 24%, var(--paper)) }
+  .yard.inactive { opacity: .47 }
+  .center { background: conic-gradient(from 45deg, var(--yellow) 0 25%, var(--blue) 25% 50%, var(--red) 50% 75%, var(--green) 75%); outline: 1px solid var(--grid) }
+  .piece-layer { pointer-events: none }
+  .stack { display: grid; grid-template-columns: repeat(var(--columns, 2), minmax(0, 1fr)); grid-auto-rows: minmax(0, 1fr); gap: 1px; padding: 1px }
+  .piece { display: grid; place-items: center; align-self: center; justify-self: center; width: 92%; aspect-ratio: 1; padding: 0; border: 1px solid var(--team-ink); border-radius: 50%; color: #211b16; background: var(--team); box-shadow: 0 1px 0 1px var(--team-ink), inset 0 0 0 2px #ffffff70; line-height: 1; font-size: clamp(8px, 1.7vw, 14px); pointer-events: auto }
+  .stack .piece { width: 100%; font-size: 0; box-shadow: inset 0 0 0 1px #ffffff70 }
+  .piece:enabled { outline: 2px solid #fff4e5; outline-offset: 1px }
+  .piece:enabled:hover, .piece:focus-visible { transform: scale(1.12); outline: 2px solid #92c5fb; z-index: 1 }
+  .piece.empty { opacity: .48; pointer-events: none }
+  .panel { background: var(--paper); border: 1px solid var(--line); border-radius: 14px; padding: 22px }
+  .message, .network, .subtle { color: var(--muted); font-size: 14px }
+  .message { margin-top: 6px; min-height: 2.9em; overflow-wrap: anywhere }
+  .network { margin-top: 12px; color: #ffb6a7 }
+  .actions { margin: 14px 0 0 }
+  .dice-controls { display: flex; gap: 10px; align-items: center; width: 100% }
+  .dice-controls .primary { flex: 1 }
+  .die { width: 43px; height: 43px; display: grid; place-items: center; flex: 0 0 auto; border: 1px solid #677a68; border-radius: 9px; background: #29382e; font-size: 36px; line-height: 1 }
+  .players { list-style: none; margin: 17px 0 0; padding: 13px 0 0; border-top: 1px solid #45574a; display: grid; gap: 6px }
+  .player { display: flex; align-items: center; gap: 8px; min-height: 30px; border-radius: 6px; padding: 4px 6px; font-size: 14px }
+  .player.active { background: #33483a }
+  .marker { width: 13px; height: 13px; flex: 0 0 auto; border: 1px solid var(--team-ink); background: var(--team); border-radius: 50% }
+  .player-name { min-width: 0; overflow-wrap: anywhere }
+  .player.empty { color: var(--muted) }
+  .player.empty .marker { background: transparent }
+  .score { margin-left: auto; color: var(--muted); font-size: 13px; white-space: nowrap }
+  .remove { margin-left: auto; padding: 4px 7px; min-height: 30px; font-size: 12px }
+  label { display: block; font-size: 14px; font-weight: 650; margin-bottom: 5px }
+  form { width: 100% }
+  input { color: var(--ink); background: #29382e; border: 1px solid #647968; border-radius: 8px; padding: 8px 10px; min-height: 40px; width: 100% }
+  form .primary { width: 100%; margin-top: 8px }
+  dialog { width: min(100% - 32px, 470px); color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 14px; padding: 23px }
+  dialog::backdrop { background: #0b110cd9 }
+  dialog h2 { margin: 0 0 12px }
+  dialog p + p { margin-top: 9px }
+  dialog ul { padding-left: 21px }
+  dialog li + li { margin-top: 6px }
+  dialog .actions { justify-content: flex-end }
+  dialog input { font: 13px ui-monospace, monospace; margin: 10px 0 0 }
+  code { font-size: .91em; overflow-wrap: anywhere }
+  @media (max-width: 680px) {
+    main { width: min(100% - 32px, 480px); padding: 20px 0 30px }
+    header { padding-bottom: 13px; margin-bottom: 20px }
+    .layout { grid-template-columns: minmax(0, 1fr); gap: 20px }
+    .panel { padding: 17px }
+    .outline { padding-inline: 10px }
+  }
+
+  .entry { max-width: 490px; margin: 38px auto 0 }
+  .entry p { margin: 10px 0 14px }
+  .card-board { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); grid-template-rows: repeat(7, minmax(0, 1fr)); gap: 3px; padding: 8px; background: #405546 }
+  .card-cell { position: relative; display: grid; place-items: center; background: var(--track); color: var(--ink); border: 1px solid #526455; border-radius: 4px; font: 700 clamp(12px, 3vw, 22px)/1 Georgia, serif; min-height: 0; padding: 0 }
+  .card-cell:enabled { outline: 2px solid var(--accent); outline-offset: -3px; background: #354a3c }
+  .card-cell:focus-visible { outline: 3px solid #92c5fb; outline-offset: -3px; z-index: 1 }
+  .suit-red { color: #ffada6 }
+  .chip { display: grid; place-items: center; width: 64%; aspect-ratio: 1; border-radius: 50%; border: 2px solid var(--team-ink); background: var(--team); color: #261e16; box-shadow: inset 0 0 0 3px #ffffff65; font-size: .64em }
+  .winning .chip { outline: 2px solid #f4f8ef; outline-offset: 2px }
+  .hand { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px }
+  .hand-card { min-width: 36px; min-height: 46px; padding: 4px; background: var(--track); border: 1px solid #647968; border-radius: 5px; font: 700 16px Georgia, serif }
+  .hand-card[aria-pressed=true] { outline: 2px solid var(--accent); outline-offset: 1px }
+  .hand-card:disabled { opacity: .7 }
+  .hand-area { margin-top: 14px }
+  .hand-area h3 { font-size: 14px; margin: 0 }
+  #pieces .piece { aspect-ratio: 1; width: 90% }
+  #join-code { font: 13px ui-monospace, monospace; margin-top: 10px }
+  main { width: min(100% - 32px, 620px); padding-top: 20px }
+  header { margin-bottom: 20px; padding-bottom: 12px; flex-wrap: wrap }
+  h1 { font: 700 clamp(20px, 5vw, 27px)/1.2 system-ui, sans-serif; letter-spacing: -.03em }
+  .layout { grid-template-columns: minmax(0, 1fr); gap: 16px }
+  .board { width: min(100%, 520px); justify-self: center }
+  #title { justify-self: start }
+  .entry { margin-top: 26px; max-width: 385px }
+  .entry h2 { margin-bottom: 15px }
+  #turn { font: 700 24px/1.1 Georgia, serif; margin: 0 }
+  .message { min-height: 0 }
+  .dice-controls .primary { flex: 0 1 auto }
+  #game-choice { display: grid; gap: 6px; padding: 0; margin: 0 0 14px; border: 0 }
+  #game-choice label { display: flex; align-items: center; gap: 7px; margin: 0; padding: 6px 9px; border: 1px solid var(--line); border-radius: 6px; cursor: pointer }
+  #game-choice label:has(:checked) { background: #33483a }
+  #game-choice input { width: auto; min-height: auto; margin: 0; accent-color: #92ba9c }
+  .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap }
+  #invite-feedback { margin-bottom: 8px }
+  .tile.lane { color: #1c1712 }
+  .icon-button { display: inline-grid; place-items: center; width: 40px; height: 40px; padding: 0; font-size: 18px }
+  .link-icon { position: relative; display: block; width: 18px; height: 14px; transform: rotate(-40deg) }
+  .link-icon::before, .link-icon::after { content: ""; position: absolute; top: 3px; width: 10px; height: 8px; box-sizing: border-box; border: 1.5px solid currentColor; border-radius: 5px }
+  .link-icon::before { left: 0 }
+  .link-icon::after { right: 0 }
+  @media (min-width: 900px) {
+    main { width: min(100% - 48px, 1080px) }
+    .layout { grid-template-columns: minmax(0, 1fr) minmax(270px, 340px); align-items: start; gap: 18px 28px }
+    #title { grid-column: 1 / -1 }
+    .board { width: 100%; justify-self: start }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>games.asherif.xyz</h1>
+    <div class="header-actions">
+      <button class="outline icon-button" id="rules-button" type="button" aria-label="How to play" title="How to play" hidden>?</button>
+      <button class="outline icon-button" id="invite-button" type="button" aria-label="Copy invite link" title="Copy invite link" hidden><span class="link-icon" aria-hidden="true"></span></button>
+    </div>
+  </header>
+  <section class="panel entry" id="entry" aria-labelledby="entry-title">
+    <h2 id="entry-title">Choose a game</h2>
+
+    <form id="entry-form">
+      <fieldset id="game-choice">
+        <legend class="visually-hidden">Game</legend>
+        <label><input type="radio" name="game" value="ludo" checked> Ludo</label>
+        <label><input type="radio" name="game" value="five"> Five in a Row</label>
+      </fieldset>
+      <label for="name">Name</label>
+      <input id="name" maxlength="20" required autocomplete="nickname">
+      <button class="primary" id="enter" type="submit" disabled>Create room</button>
+    </form>
+    <p id="entry-status" class="network" role="status" hidden></p>
+  </section>
+  <p id="invite-feedback" class="subtle" role="status" hidden></p>
+  <div class="layout" id="table" hidden>
+    <h2 id="title"></h2>
+    <section class="board" id="ludo-board" aria-label="Ludo board">
+      <div class="layer" id="tiles" aria-hidden="true"></div><div class="layer piece-layer" id="pieces"></div>
+    </section>
+    <section class="board card-board" id="card-board" aria-label="Five in a Row board" hidden></section>
+    <section class="panel" aria-labelledby="turn">
+      <h3 id="turn"></h3>
+      <p class="message" id="message" role="status"></p>
+      <p class="network" id="error" role="alert" hidden></p>
+      <div class="actions">
+        <div class="dice-controls" id="dice-controls" hidden><span class="die" id="die" role="img"></span><button class="primary" id="roll">Roll dice</button></div>
+        <div class="actions" id="move-options" aria-label="Choose a piece" hidden></div>
+        <button class="primary" id="start" hidden>Start match</button>
+        <button class="quiet" id="lobby" hidden>Return to lobby</button>
+        <button class="outline" id="reconnect" hidden>Reconnect</button>
+      </div>
+      <section class="hand-area" id="hand-area" hidden>
+        <h3>Your cards</h3><div class="hand" id="hand"></div>
+        <div class="actions"><button class="outline" id="exchange" hidden>Exchange selected card</button></div>
+      </section>
+      <ul class="players" id="players" aria-label="Players"></ul>
+    </section>
+  </div>
+</main>
+<dialog id="rules" aria-labelledby="rules-heading"><h2 id="rules-heading">How to play</h2><ul id="rule-list"></ul><form method="dialog" class="actions"><button class="outline">Close</button></form></dialog>
+<dialog id="invite" aria-labelledby="invite-heading"><h2 id="invite-heading">Invite link</h2><p>Send this link privately. Friends can join with a browser.</p><input id="join-code" aria-label="Invite link" readonly><div class="actions"><button class="primary" id="copy" type="button">Copy link</button><form method="dialog"><button class="outline">Close</button></form></div></dialog>
+<script>
+/* GO_RUNTIME */
+</script>
+<!-- THIRD_PARTY_NOTICES -->
+<script>
+'use strict';
+
+const COLORS = ['red', 'green', 'yellow', 'blue'];
+const TITLES = { ludo: 'Ludo', five: 'Five in a Row' };
+const RULES = {
+  ludo: [
+    'Roll a six to bring a piece out of your yard. Otherwise, move a piece already on the board.',
+    'Land on an opponent’s piece to send it back to its yard. Marked squares are safe.',
+    'Roll again after a six or a capture.',
+    'Use an exact roll to bring a piece home. Get all four home to win.',
+  ],
+  five: [
+    'Pick a card in your hand and place a chip on an empty square with the same card.',
+    'If none of your cards fit, exchange a card to end your turn.',
+    'Get five of your chips in a straight line to win. Rows, columns and diagonals count.',
+    'The game is a draw if the board fills up without a winner.',
+  ],
+};
+
+const HOME = 56;
+const LANE_START = 51;
+const SAFE = new Set([0, 8, 13, 21, 26, 34, 39, 47]);
+const EMPTY_PIECES = [-1, -1, -1, -1];
+const CARD_RANKS = ['2', '4', '6', '8', '10', 'Q'];
+const SUITS = ['♠', '♥', '♣', '♦'];
+const BOARD_SIZE = 7;
+const CARD_TYPES = SUITS.flatMap(suit => CARD_RANKS.map(rank => rank + suit)).concat('A♠');
+
+function rotate([row, col], turns) {
+  for (let count = 0; count < turns; count++) [row, col] = [col, 14 - row];
+  return [row, col];
+}
+
+const QUARTER = [[6, 1], [6, 2], [6, 3], [6, 4], [6, 5], [5, 6], [4, 6], [3, 6], [2, 6], [1, 6], [0, 6], [0, 7], [0, 8]];
+const TRACK = COLORS.flatMap((_, seat) => QUARTER.map(square => rotate(square, seat)));
+const LANES = COLORS.map((_, seat) => Array.from({ length: 6 }, (_, col) => rotate([7, col + 1], seat)));
+const YARDS = COLORS.map((_, seat) => [[1, 1], [1, 4], [4, 1], [4, 4]].map(square => rotate(square, seat)));
+
+function shuffled(items) {
+  const order = items.slice();
+  const random = new Uint32Array(1);
+  for (let index = order.length - 1; index > 0; index--) {
+    crypto.getRandomValues(random);
+    const other = random[0] % (index + 1);
+    [order[index], order[other]] = [order[other], order[index]];
+  }
+  return order;
+}
+
+function newPlayer(name, token) {
+  return { name, token, pieces: [...EMPTY_PIECES], hand: [] };
+}
+
+function createRoom(game, name) {
+  return {
+    game, version: 0, phase: 'lobby', turn: 0, winner: null,
+    players: [newPlayer(name, null), null, null, null],
+    message: '', die: 0, rolledBy: null, moves: [],
+    cards: [], chips: [], deck: [], discard: [], line: [],
+  };
+}
+
+function view(room, seat) {
+  const { game, version, phase, turn, winner, players, message, die, rolledBy, moves, cards, chips, line } = room;
+  return {
+    game, version, phase, turn, winner, message, die, rolledBy, cards, chips, line, you: seat,
+    players: players.map(player => player && { name: player.name, pieces: player.pieces, cards: player.hand.length }),
+    moves: seat === turn ? moves : [],
+    hand: seat === null ? [] : players[seat].hand,
+  };
+}
+
+function nextTurn(room) {
+  do room.turn = (room.turn + 1) % 4;
+  while (!room.players[room.turn]);
+}
+
+function reset(room, phase) {
+  Object.assign(room, { phase, turn: 0, winner: null, die: 0, rolledBy: null, moves: [], line: [] });
+  room.message = phase === 'playing' ? room.players[0].name + ' goes first.' : '';
+  room.players.forEach(player => {
+    if (player) {
+      player.pieces = [...EMPTY_PIECES];
+      player.hand = [];
+    }
+  });
+  if (room.game === 'five') {
+    const boardDeck = [...CARD_TYPES, ...CARD_TYPES.slice(0, -1)];
+    room.cards = shuffled(boardDeck);
+    room.chips = Array(BOARD_SIZE ** 2).fill(null);
+    room.deck = shuffled([...boardDeck, ...boardDeck]);
+    room.discard = [];
+    if (phase === 'playing') {
+      room.players.forEach(player => {
+        if (player) player.hand = room.deck.splice(-4);
+      });
+    }
+  }
+}
+
+function roll(room, player, seat) {
+  if (room.moves.length) throw Error('Move a piece before rolling again.');
+  const die = (crypto.getRandomValues(new Uint32Array(1))[0] % 6) + 1;
+  room.die = die;
+  room.rolledBy = seat;
+  room.moves = player.pieces.flatMap((step, index) =>
+    (step === -1 && die === 6) || (step >= 0 && step + die <= HOME) ? [index] : []);
+  room.message = player.name + ' rolled ' + die + '.';
+  if (!room.moves.length) {
+    room.message += die === 6 ? ' No legal move. Roll again.' : ' No legal move.';
+    if (die !== 6) nextTurn(room);
+  }
+}
+
+function move(room, player, seat, piece) {
+  if (!room.moves.includes(piece)) throw Error('Choose a highlighted piece.');
+  const previous = player.pieces[piece];
+  const step = previous === -1 ? 0 : previous + room.die;
+  player.pieces[piece] = step;
+  room.moves = [];
+  let captured = false;
+  const square = (13 * seat + step) % TRACK.length;
+  if (step < LANE_START && !SAFE.has(square)) {
+    room.players.forEach((opponent, otherSeat) => {
+      if (!opponent || otherSeat === seat) return;
+      opponent.pieces.forEach((otherStep, index) => {
+        if (otherStep >= 0 && otherStep < LANE_START && (13 * otherSeat + otherStep) % TRACK.length === square) {
+          opponent.pieces[index] = -1;
+          captured = true;
+        }
+      });
+    });
+  }
+  if (player.pieces.every(position => position === HOME)) {
+    room.phase = 'won';
+    room.winner = seat;
+    room.message = player.name + ' brought all four pieces home.';
+    return;
+  }
+  room.message = player.name + (captured ? ' sent a piece back to its yard.'
+    : step === HOME ? ' brought a piece home.' : ' moved piece ' + (piece + 1) + '.');
+  if (captured || room.die === 6) room.message += ' Roll again.';
+  else nextTurn(room);
+}
+
+function matchingCells(cards, chips, card) {
+  return cards.flatMap((value, index) => value === card && chips[index] === null ? [index] : []);
+}
+
+function winningLine(chips, index, seat) {
+  const row = Math.floor(index / BOARD_SIZE);
+  const col = index % BOARD_SIZE;
+  for (const [dy, dx] of [[0, 1], [1, 0], [1, 1], [1, -1]]) {
+    const line = [index];
+    for (const direction of [-1, 1]) {
+      let r = row + direction * dy;
+      let c = col + direction * dx;
+      while (r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE) {
+        const cell = r * BOARD_SIZE + c;
+        if (chips[cell] !== seat) break;
+        line.push(cell);
+        r += direction * dy;
+        c += direction * dx;
+      }
+    }
+    if (line.length >= 5) return line;
+  }
+  return [];
+}
+
+function playCard(room, player, seat, action, handIndex, cell) {
+  if (!Number.isInteger(handIndex) || handIndex < 0 || handIndex >= player.hand.length) throw Error('Choose a card.');
+  const card = player.hand[handIndex];
+  if (action === 'play') {
+    if (!matchingCells(room.cards, room.chips, card).includes(cell)) throw Error('Choose an empty matching square.');
+    room.chips[cell] = seat;
+    room.line = winningLine(room.chips, cell, seat);
+    if (room.line.length || room.chips.every(chip => chip !== null)) {
+      player.hand.splice(handIndex, 1);
+      room.phase = 'won';
+      room.winner = room.line.length ? seat : null;
+      room.message = room.line.length ? player.name + ' made five in a row.' : 'The board is full.';
+      return;
+    }
+    room.message = player.name + ' played ' + card + '.';
+  } else {
+    if (player.hand.some(value => matchingCells(room.cards, room.chips, value).length)) throw Error('You have a playable card.');
+    room.message = player.name + ' exchanged a card.';
+  }
+  if (!room.deck.length) {
+    room.deck = shuffled(room.discard);
+    room.discard = [];
+  }
+  room.discard.push(card);
+  player.hand[handIndex] = room.deck.pop();
+  nextTurn(room);
+}
+
+function joinRoom(room, name, token) {
+  const existing = room.players.findIndex(player => player?.token === token);
+  if (existing !== -1) return existing;
+  if (room.phase !== 'lobby') throw Error('The match has started. Ask the host to reopen the lobby.');
+  const seat = [2, 1, 3].find(index => !room.players[index]);
+  if (seat === undefined) throw Error('The room is full.');
+  room.players[seat] = newPlayer(name, token);
+  room.version++;
+  return seat;
+}
+
+function actionAt(room, seat, input) {
+  if (input.version !== room.version) throw Error('The room changed. Try again.');
+  if (!room.players[seat]) throw Error('Take a seat first.');
+  const { action } = input;
+  if (seat === 0 && action === 'lobby') {
+    reset(room, 'lobby');
+  } else if (seat === 0 && action === 'start' && room.phase !== 'playing') {
+    if (room.players.filter(Boolean).length < 2) throw Error('At least two players are needed.');
+    reset(room, 'playing');
+  } else if (seat === 0 && action === 'remove' && room.phase === 'lobby' && [1, 2, 3].includes(input.seat)) {
+    room.players[input.seat] = null;
+  } else {
+    if (room.phase !== 'playing' || room.turn !== seat) throw Error('Wait for your turn.');
+    const player = room.players[seat];
+    if (room.game === 'ludo' && action === 'roll') roll(room, player, seat);
+    else if (room.game === 'ludo' && action === 'move') move(room, player, seat, input.piece);
+    else if (room.game === 'five' && ['play', 'exchange'].includes(action)) playCard(room, player, seat, action, input.card, input.cell);
+    else throw Error('That action is unavailable.');
+  }
+  room.version++;
+}
+
+const byId = id => document.getElementById(id);
+const inviteAddress = new URLSearchParams(location.hash.slice(1)).get('join');
+const playerToken = inviteAddress
+  ? sessionStorage.getItem('tabletop:' + inviteAddress) || crypto.randomUUID()
+  : null;
+if (playerToken) sessionStorage.setItem('tabletop:' + inviteAddress, playerToken);
+const pendingPeers = new Set();
+let room = null;
+let listener = null;
+let guest = null;
+let state = null;
+let playerName = '';
+let connectionReady = false;
+let pending = false;
+let selected = null;
+let runtime = null;
+
+function loadTailcat() {
+  runtime ??= (async () => {
+    const go = new Go();
+    const embedded = '__TAILCAT_WASM__';
+    const parts = __TAILCAT_PARTS__;
+    const chunks = embedded ? [typeof Uint8Array.fromBase64 === 'function'
+      ? Uint8Array.fromBase64(embedded)
+      : Uint8Array.from(atob(embedded), char => char.charCodeAt(0))]
+      : await Promise.all(Array.from({ length: parts }, async (_, index) => {
+        const response = await fetch(`tailcat-${index}.bin`);
+        if (!response.ok) throw Error('Could not load Tailcat.');
+        return response.arrayBuffer();
+      }));
+    const decompressed = new Blob(chunks).stream().pipeThrough(new DecompressionStream('gzip'));
+    const wasm = await WebAssembly.instantiate(await new Response(decompressed).arrayBuffer(), go.importObject);
+    await new Promise((resolve, reject) => {
+      window.tabletopReady = resolve;
+      go.run(wasm.instance).then(() => reject(Error('Tailcat stopped.')), reject);
+    });
+  })();
+  return runtime;
+}
+
+// A single ordered stream carries newline-delimited messages for each player.
+function makePeer(connection, receive, onClose) {
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder('utf-8', { fatal: true });
+  let closed = false;
+  let queue = Promise.resolve();
+  let queued = 0;
+  const peer = {
+    token: null,
+    close() {
+      if (closed) return;
+      closed = true;
+      connection.close();
+      onClose(peer);
+    },
+    send(message) {
+      if (closed) return;
+      if (queued >= 20) {
+        peer.close();
+        return;
+      }
+      const bytes = encoder.encode(JSON.stringify(message) + '\n');
+      queued++;
+      queue = queue.then(() => closed ? undefined : connection.write(bytes))
+        .catch(() => peer.close()).finally(() => queued--);
+    },
+  };
+  async function read() {
+    let rest = '';
+    try {
+      while (!closed) {
+        const bytes = await connection.read();
+        if (!bytes || closed) break;
+        rest += decoder.decode(bytes, { stream: true });
+        if (rest.length > 16384) throw Error('Message too large');
+        let end;
+        while ((end = rest.indexOf('\n')) !== -1) {
+          const frame = JSON.parse(rest.slice(0, end));
+          rest = rest.slice(end + 1);
+          if (!frame || typeof frame !== 'object' || Array.isArray(frame)) throw Error('Invalid message');
+          receive(peer, frame);
+          if (closed) break;
+        }
+      }
+    } catch {
+      // Invalid messages and ended sessions both release the peer stream.
+    } finally {
+      peer.close();
+    }
+  }
+  read();
+  return peer;
+}
+
+function showStatus(id, text = '') {
+  const status = byId(id);
+  status.textContent = text;
+  status.hidden = !text;
+}
+
+function publish() {
+  update(view(room, 0));
+  for (const peer of pendingPeers) {
+    if (!peer.token) continue;
+    const seat = room.players.findIndex(player => player?.token === peer.token);
+    if (seat === -1) {
+      peer.send({ error: 'Your seat was removed. You can reconnect to join again.' });
+    } else {
+      peer.send({ state: view(room, seat) });
+    }
+  }
+}
+
+function cleanName(value) {
+  if (typeof value !== 'string') return '';
+  const name = value.trim();
+  return name.length <= 20 && !/[\x00-\x1f\x7f]/.test(name) ? name : '';
+}
+
+function accept(connection) {
+  if (!room || pendingPeers.size >= 8) {
+    connection.close();
+    return;
+  }
+  const peer = makePeer(connection, (sender, input) => {
+    try {
+      if (!sender.token) {
+        const name = cleanName(input.name);
+        if (input.action !== 'join' || !name || typeof input.token !== 'string' ||
+            !/^[a-f0-9-]{36}$/.test(input.token)) throw Error('Enter a name to join.');
+        joinRoom(room, name, input.token);
+        for (const old of pendingPeers) {
+          if (old !== sender && old.token === input.token) old.close();
+        }
+        sender.token = input.token;
+      } else {
+        const seat = room.players.findIndex(player => player?.token === sender.token);
+        if (seat === -1) throw Error('Your seat was removed. Reconnect to join again.');
+        actionAt(room, seat, input);
+      }
+      publish();
+    } catch (err) {
+      sender.send({ error: err.message });
+    }
+  }, sender => {
+    clearTimeout(sender.joinTimer);
+    pendingPeers.delete(sender);
+  });
+  pendingPeers.add(peer);
+  peer.joinTimer = setTimeout(() => {
+    if (!peer.token) peer.close();
+  }, 15000);
+}
+
+function update(snapshot) {
+  if (!state || snapshot.version !== state.version || snapshot.you !== state.you) selected = null;
+  state = snapshot;
+  render();
+}
+
+async function connect() {
+  if (byId('enter').disabled) return;
+  byId('enter').disabled = true;
+  byId('reconnect').disabled = true;
+  showStatus('entry-status', 'Joining room…');
+  if (state) showStatus('error', 'Reconnecting…');
+  let closedMessage = '';
+  try {
+    await loadTailcat();
+    const stream = await window.tabletopDial(inviteAddress);
+    const timeout = setTimeout(() => guest?.close(), 12000);
+    const current = makePeer(stream, (peer, message) => {
+      if (message.error) {
+        pending = false;
+        if (!connectionReady || message.error.startsWith('Your seat was removed')) {
+          closedMessage = message.error;
+          peer.close();
+        } else {
+          showStatus('error', message.error);
+          render();
+        }
+      } else if (message.state) {
+        clearTimeout(timeout);
+        connectionReady = true;
+        pending = false;
+        showStatus('error');
+        update(message.state);
+      }
+    }, () => {
+      clearTimeout(timeout);
+      guest = null;
+      connectionReady = false;
+      pending = false;
+      const note = closedMessage || 'Connection lost. Check that the host still has the room open, then reconnect.';
+      showStatus('error', note);
+      showStatus('entry-status', note);
+      byId('enter').disabled = byId('reconnect').disabled = false;
+      if (state) render();
+    });
+    guest = current;
+    guest.send({ action: 'join', name: playerName, token: playerToken });
+  } catch {
+    const note = 'Could not join the room. Check the invite and ask the host to keep their tab open.';
+    showStatus('entry-status', note);
+    showStatus('error', note);
+    byId('enter').disabled = byId('reconnect').disabled = false;
+  }
+}
+
+async function host() {
+  byId('enter').disabled = true;
+  showStatus('entry-status', 'Creating room…');
+  try {
+    await loadTailcat();
+    room = createRoom(document.querySelector('input[name=game]:checked').value, playerName);
+    reset(room, 'lobby');
+    listener = await window.tabletopListen(accept);
+    connectionReady = true;
+    publish();
+  } catch (error) {
+    room = null;
+    showStatus('entry-status', 'Could not create the room. Try again. ' + error.message);
+    byId('enter').disabled = false;
+  }
+}
+
+function submit(action, fields = {}) {
+  if (!connectionReady || pending) return;
+  showStatus('error');
+  const input = { action, version: state.version, ...fields };
+  if (!room) {
+    pending = true;
+    guest.send(input);
+    render();
+    return;
+  }
+  try {
+    actionAt(room, 0, input);
+    publish();
+  } catch (error) {
+    showStatus('error', error.message);
+  }
+}
+
+function place(element, [row, col], span = 1) {
+  element.style.gridArea = `${row + 1} / ${col + 1} / span ${span} / span ${span}`;
+}
+
+function tile(css, square, span = 1, label = '') {
+  const element = document.createElement('div');
+  element.className = css;
+  element.textContent = label;
+  place(element, square, span);
+  byId('tiles').append(element);
+  return element;
+}
+
+const yards = [[0, 0], [0, 9], [9, 9], [9, 0]].map((square, seat) => {
+  const yard = tile('yard ' + COLORS[seat], square, 6);
+  const inset = document.createElement('div');
+  inset.className = 'yard-inner';
+  yard.append(inset);
+  return yard;
+});
+TRACK.forEach((square, index) => {
+  const color = index % 13 === 0 ? ' lane ' + COLORS[index / 13] : '';
+  tile('tile' + color, square, 1, SAFE.has(index) ? '✦' : '');
+});
+LANES.forEach((lane, seat) => lane.slice(0, -1).forEach(square => tile('tile lane ' + COLORS[seat], square)));
+tile('center', [6, 6], 3);
+
+function button(text, css, click) {
+  const el = document.createElement('button');
+  el.type = 'button';
+  el.textContent = text;
+  el.className = css;
+  el.addEventListener('click', click);
+  return el;
+}
+
+function pieceSquare(seat, index, step) {
+  if (step === -1) return YARDS[seat][index];
+  if (step >= LANE_START) return LANES[seat][step - LANE_START];
+  return TRACK[(13 * seat + step) % TRACK.length];
+}
+
+function renderLudo(canAct) {
+  const cells = new Map();
+  state.players.forEach((player, seat) => {
+    yards[seat].classList.toggle('inactive', !player);
+    if (!player && state.phase !== 'lobby') return;
+    (player?.pieces ?? EMPTY_PIECES).forEach((step, index) => {
+      const square = pieceSquare(seat, index, step);
+      const key = square.join(',');
+      if (!cells.has(key)) cells.set(key, { square, buttons: [] });
+      const piece = button(index + 1, 'piece ' + COLORS[seat] + (player ? '' : ' empty'), () => submit('move', { piece: index }));
+      piece.disabled = !canAct || seat !== state.you || !state.moves.includes(index);
+      piece.setAttribute('aria-label', `${player?.name ?? COLORS[seat]}, piece ${index + 1}`);
+      cells.get(key).buttons.push(piece);
+    });
+  });
+  const fragment = document.createDocumentFragment();
+  for (const { square, buttons } of cells.values()) {
+    if (buttons.length === 1) {
+      place(buttons[0], square);
+      fragment.append(buttons[0]);
+    } else {
+      const stack = document.createElement('div');
+      stack.className = 'stack';
+      stack.style.setProperty('--columns', Math.ceil(Math.sqrt(buttons.length)));
+      place(stack, square);
+      stack.append(...buttons);
+      fragment.append(stack);
+    }
+  }
+  byId('pieces').replaceChildren(fragment);
+  byId('roll').disabled = !canAct || !!state.moves.length;
+  byId('die').textContent = ['–', '⚀', '⚁', '⚂', '⚃', '⚄', '⚅'][state.die];
+  byId('die').setAttribute('aria-label', state.die ? `Die shows ${state.die}` : 'Die has not been rolled');
+  const options = byId('move-options');
+  options.hidden = !canAct || !state.moves.length;
+  options.replaceChildren(...state.moves.map(piece => button('Piece ' + (piece + 1), 'outline', () => submit('move', { piece }))));
+}
+
+function renderCards(canAct) {
+  const legal = selected === null ? [] : matchingCells(state.cards, state.chips, state.hand[selected]);
+  byId('card-board').replaceChildren(...state.cards.map((card, index) => {
+    const chip = state.chips[index];
+    const cell = button(card, 'card-cell' + (/[♥♦]/.test(card) ? ' suit-red' : ''), () => submit('play', { card: selected, cell: index }));
+    cell.disabled = !canAct || !legal.includes(index);
+    if (chip !== null) {
+      const marker = document.createElement('span');
+      marker.className = 'chip ' + COLORS[chip];
+      marker.textContent = chip + 1;
+      cell.replaceChildren(marker);
+    }
+    cell.classList.toggle('winning', state.line.includes(index));
+    cell.setAttribute('aria-label', `Row ${Math.floor(index / BOARD_SIZE) + 1}, column ${index % BOARD_SIZE + 1}, ${card}` +
+      (chip === null ? '' : ', ' + state.players[chip].name + '’s chip'));
+    return cell;
+  }));
+  byId('hand-area').hidden = state.phase === 'lobby';
+  byId('hand').replaceChildren(...state.hand.map((card, index) => {
+    const option = button(card, 'hand-card' + (/[♥♦]/.test(card) ? ' suit-red' : ''), () => {
+      selected = selected === index ? null : index;
+      render();
+      byId('hand').children[index]?.focus();
+    });
+    option.disabled = !canAct;
+    option.setAttribute('aria-pressed', String(selected === index));
+    return option;
+  }));
+  byId('exchange').hidden = !canAct || selected === null ||
+    state.hand.some(card => matchingCells(state.cards, state.chips, card).length);
+}
+
+function render() {
+  const { game, phase, players, winner, turn, you } = state;
+  const lobby = phase === 'lobby';
+  const playing = phase === 'playing';
+  const myTurn = playing && turn === you;
+  const canAct = myTurn && connectionReady && !pending;
+  const count = players.filter(Boolean).length;
+  byId('title').textContent = TITLES[game];
+  byId('entry').hidden = true;
+  byId('table').hidden = false;
+  byId('rules-button').hidden = false;
+  byId('invite-button').hidden = !listener;
+  byId('ludo-board').hidden = game !== 'ludo';
+  byId('card-board').hidden = game !== 'five';
+  byId('dice-controls').hidden = game !== 'ludo' || !playing;
+  byId('reconnect').hidden = connectionReady || !inviteAddress;
+  byId('start').hidden = !room || playing;
+  byId('start').disabled = count < 2;
+  byId('start').textContent = lobby ? 'Start match' : 'Play again';
+  byId('lobby').hidden = !room || lobby;
+  byId('turn').textContent = lobby ? 'Lobby'
+    : playing ? myTurn ? 'Your turn' : players[turn].name + '’s turn'
+    : winner === null ? 'Draw' : winner === you ? 'You win!' : players[winner].name + ' wins!';
+  byId('message').textContent = lobby
+    ? count + ' of 4 seats filled. ' + (count < 2 ? 'Waiting for another player.' : 'Ready to start.')
+    : state.message + (myTurn && state.moves.length ? ' Choose a piece.' : '');
+  byId('players').replaceChildren(...players.map((player, seat) => {
+    const row = document.createElement('li');
+    row.className = 'player ' + COLORS[seat] + (player ? '' : ' empty');
+    row.classList.toggle('active', playing && turn === seat);
+    const marker = document.createElement('span');
+    marker.className = 'marker';
+    marker.setAttribute('aria-hidden', 'true');
+    const name = document.createElement('span');
+    name.className = 'player-name';
+    name.textContent = player ? player.name + (seat === you ? ' (you)' : seat === 0 ? ' (host)' : '')
+      : lobby ? 'Open seat' : 'Unused seat';
+    row.append(marker, name);
+    if (player && !lobby) {
+      const score = document.createElement('span');
+      score.className = 'score';
+      score.textContent = game === 'ludo' ? player.pieces.filter(step => step === HOME).length + ' / 4' : player.cards + ' cards';
+      row.append(score);
+    } else if (player && room && seat !== 0) {
+      const remove = button('Remove', 'quiet remove', () => submit('remove', { seat }));
+      remove.setAttribute('aria-label', 'Remove ' + player.name);
+      row.append(remove);
+    }
+    return row;
+  }));
+  if (game === 'ludo') renderLudo(canAct);
+  else renderCards(canAct);
+}
+
+if (inviteAddress) {
+  byId('entry-title').textContent = 'Join room';
+  byId('game-choice').hidden = true;
+  byId('enter').textContent = 'Join room';
+  byId('name').value = sessionStorage.getItem('tabletop-name') || '';
+}
+byId('entry-form').addEventListener('submit', event => {
+  event.preventDefault();
+  playerName = cleanName(byId('name').value);
+  if (!playerName) {
+    showStatus('entry-status', 'Enter a name between 1 and 20 characters.');
+    return;
+  }
+  sessionStorage.setItem('tabletop-name', playerName);
+  if (inviteAddress) connect();
+  else host();
+});
+byId('reconnect').addEventListener('click', connect);
+byId('start').addEventListener('click', () => submit('start'));
+byId('lobby').addEventListener('click', () => {
+  if (state.phase !== 'playing' || confirm('End this match and return to the lobby?')) submit('lobby');
+});
+byId('roll').addEventListener('click', () => submit('roll'));
+byId('exchange').addEventListener('click', () => submit('exchange', { card: selected }));
+byId('rules-button').addEventListener('click', () => {
+  byId('rule-list').replaceChildren(...RULES[state.game].map(rule => {
+    const entry = document.createElement('li');
+    entry.textContent = rule;
+    return entry;
+  }));
+  byId('rules').showModal();
+});
+byId('invite-button').addEventListener('click', async () => {
+  const url = new URL(location.href);
+  url.hash = new URLSearchParams({ join: listener.address });
+  byId('join-code').value = url.href;
+  byId('copy').textContent = 'Copy link';
+  try {
+    await navigator.clipboard.writeText(url.href);
+    showStatus('invite-feedback', 'Invite link copied.');
+  } catch {
+    byId('invite').showModal();
+  }
+});
+byId('copy').addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText(byId('join-code').value);
+    byId('copy').textContent = 'Copied';
+  } catch {
+    byId('join-code').focus();
+    byId('join-code').select();
+    byId('copy').textContent = 'Selected for copying';
+  }
+});
+window.addEventListener('pagehide', () => {
+  guest?.close();
+  for (const peer of pendingPeers) peer.close();
+  listener?.close();
+});
+window.addEventListener('pageshow', event => {
+  if (event.persisted && (room || state)) location.reload();
+});
+byId('enter').disabled = false;
+</script>
+</body>
+</html>
